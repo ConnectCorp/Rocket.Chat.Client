@@ -1,0 +1,35 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2012
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Rocket.Chat.Net.Client", "Rocket.Chat.Net.Client\Rocket.Chat.Net.Client.csproj", "{5FD0615B-71F5-4184-AB19-E411348E595D}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{5FD0615B-71F5-4184-AB19-E411348E595D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5FD0615B-71F5-4184-AB19-E411348E595D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5FD0615B-71F5-4184-AB19-E411348E595D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5FD0615B-71F5-4184-AB19-E411348E595D}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(MonoDevelopProperties) = preSolution
+		Policies = $0
+		$0.DotNetNamingPolicy = $1
+		$1.DirectoryNamespaceAssociation = None
+		$1.ResourceNamePolicy = FileFormatDefault
+		$0.TextStylePolicy = $2
+		$2.FileWidth = 120
+		$2.EolMarker = Unix
+		$2.inheritsSet = VisualStudio
+		$2.inheritsScope = text/plain
+		$2.scope = text/x-csharp
+		$0.CSharpFormattingPolicy = $3
+		$3.AfterDelegateDeclarationParameterComma = True
+		$3.inheritsSet = Mono
+		$3.inheritsScope = text/x-csharp
+		$3.scope = text/x-csharp
+		description = Rocket.Chat client for the .NET framework.
+	EndGlobalSection
+EndGlobal
