@@ -3,12 +3,12 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{5FD0615B-71F5-4184-AB19-E411348E595D}</ProjectGuid>
-    <OutputType>Library</OutputType>
-    <RootNamespace>Rocket.Chat.Net.Client</RootNamespace>
-    <AssemblyName>Rocket.Chat.Net.Client</AssemblyName>
+    <ProjectGuid>{BF4D2CE5-184A-41BB-AB3C-CF25534F2DA4}</ProjectGuid>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>RC.Client.Console</RootNamespace>
+    <AssemblyName>RC.Client.Console</AssemblyName>
+    <StartupObject>RC.Client.Console.MainClass</StartupObject>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
-    <Description>Rocket.Chat client for the .NET framework.</Description>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -18,7 +18,7 @@
     <DefineConstants>DEBUG;</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <ConsolePause>false</ConsolePause>
+    <Externalconsole>true</Externalconsole>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>full</DebugType>
@@ -26,12 +26,15 @@
     <OutputPath>bin\Release</OutputPath>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <ConsolePause>false</ConsolePause>
+    <Externalconsole>true</Externalconsole>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="DDPClient.Net">
-      <HintPath>lib\DDPClient.Net.dll</HintPath>
+      <HintPath>..\Rocket.Chat.Net.Client\lib\DDPClient.Net.dll</HintPath>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>..\packages\Newtonsoft.Json.8.0.1\lib\net45\Newtonsoft.Json.dll</HintPath>
     </Reference>
     <Reference Include="System.Reactive.Interfaces">
       <HintPath>..\packages\Rx-Interfaces.2.2.5\lib\net45\System.Reactive.Interfaces.dll</HintPath>
@@ -48,28 +51,19 @@
     <Reference Include="WebSocket4Net">
       <HintPath>..\packages\WebSocket4Net.0.14.1\lib\net45\WebSocket4Net.dll</HintPath>
     </Reference>
-    <Reference Include="Microsoft.CSharp" />
-    <Reference Include="Newtonsoft.Json">
-      <HintPath>..\packages\Newtonsoft.Json.8.0.1\lib\net45\Newtonsoft.Json.dll</HintPath>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="src\RocketChatClient.cs" />
-    <Compile Include="src\Model\BaseResponse.cs" />
-    <Compile Include="src\Model\Error.cs" />
-    <Compile Include="src\Model\LoginResponse.cs" />
-    <Compile Include="src\Model\Message.cs" />
-    <Compile Include="src\Constants.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ItemGroup>
-    <Folder Include="lib\" />
-    <Folder Include="src\" />
-    <Folder Include="src\Model\" />
+    <ProjectReference Include="..\Rocket.Chat.Net.Client\Rocket.Chat.Net.Client.csproj">
+      <Project>{5FD0615B-71F5-4184-AB19-E411348E595D}</Project>
+      <Name>Rocket.Chat.Net.Client</Name>
+    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <None Include="lib\DDPClient.Net.dll" />
     <None Include="packages.config" />
   </ItemGroup>
 </Project>
