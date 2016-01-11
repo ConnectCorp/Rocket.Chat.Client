@@ -22,6 +22,8 @@ namespace Rocket.Chat.Net.Client
 
         private readonly DDPClient ddpClient;
 
+        private string meteorUrl;
+
         private int loginRequestId;
 
         private bool isConnecting;
@@ -42,11 +44,16 @@ namespace Rocket.Chat.Net.Client
 
         #endregion
 
-        public RocketChatClient ()
+        public RocketChatClient (string serverUrl)
         {
+            if (!IsValidWebsocketUrl (serverUrl)) {
+//                throw new ArgumentException ("Invalid URL");
+            }
+
             ddpClient = new DDPClient (this);
             loginSubject = new AsyncSubject<LoginResponse> ();
             messageStreamByRoom = new Dictionary<string, Subject<Message>> ();
+            meteorUrl = serverUrl;
         }
 
         private IObservable<bool> Connect ()
@@ -56,7 +63,7 @@ namespace Rocket.Chat.Net.Client
                     try {
                         connectSubject = new AsyncSubject<bool> ();
                         isConnecting = true;
-                        ddpClient.Connect ("localhost:3000", false);
+                        ddpClient.Connect (meteorUrl, false);
                     } catch (Exception) {
                         isConnecting = false;
                         throw;
@@ -217,7 +224,9 @@ namespace Rocket.Chat.Net.Client
                 List<object> args = (List<object>)data.GetValue<object> ("Args", null);
                 if (args != null) {
                     string roomId = (string)args [0];
-                    string messageContent = (string)((IDictionary<string, object>)args [1]) ["Msg"];
+                    IDictionary<string, object> uData = (IDictionary<string, object>)args [1];
+                    string messageContent = (string)uData ["Msg"];
+                    string messageSenderUsername = (string)uData ["Msg"];
                     if (messageStreamByRoom.ContainsKey (roomId)) {
                         var message = new Message (messageContent);
                         messageStreamByRoom [roomId].OnNext (message);
@@ -225,6 +234,16 @@ namespace Rocket.Chat.Net.Client
                 }
                 break;
             }
+        }
+
+        private bool IsValidWebsocketUrl (string url)
+        {
+            // TODO Do exhaustive testing of this, pretty sure it lets some incorrect urls in
+            // (because of Uri.IsWellFormedUriString()).
+            return !string.IsNullOrWhiteSpace (url)
+            && (url.StartsWith ("ws://")
+            || url.StartsWith ("wss://"))
+            && Uri.IsWellFormedUriString (url, UriKind.Absolute);
         }
 
         private Exception LogAndReturnBack (Exception e)
