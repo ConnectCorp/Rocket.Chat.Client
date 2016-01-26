@@ -43,7 +43,7 @@ namespace Rocket.Chat.Net.Client
         {
             try {
                 return Util.FromDDPMessageResult<T> (ddpMessage);
-            } catch (Exception e) {
+            } catch (Exception) {
                 // This is the sad consequence of the server using different data types for the field Result.
                 // Sometimes that field can be a boolean, others a string, and others a json object (in which case it 
                 // is handled in the try block). Here we just assign the value to a generic object type and let the 
