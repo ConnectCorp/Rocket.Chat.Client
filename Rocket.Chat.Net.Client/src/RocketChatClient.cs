@@ -7,244 +7,267 @@ using Net.DDP.Client;
 using System.Threading.Tasks;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
+using System.Collections;
+using Newtonsoft.Json;
 
 namespace Rocket.Chat.Net.Client
 {
-    // TODO This class is NOT thread-safe yet
-    public class RocketChatClient :  IDataSubscriber
+    public class RocketChatClient
     {
-
-        // TODO Double check that thread safety is really gonna be needed.
+        // TODO Implement the required level of thread safety.
         private readonly object connectLock = new object ();
-
-        // The name of the collection of Rocket.Messages
-        private const string MessageCollection = "stream-messages";
-
-        private readonly DDPClient ddpClient;
-
+        private DDPClient ddpClient;
         private string meteorUrl;
-
-        private int loginRequestId;
-
-        private bool isConnecting;
 
         private bool IsConnectedAndLoggedIn { get { return true; } }
 
-        public string Session { get; set; }
-
-        #region RocketChat subjects
-
-        // Subjects should be avoided. However, this is one of the very few use cases where they are justifiable.
-        // And this is also a consequence of the API that the DDPClient offers: they don't use either Events or async
-        // functions, and instead rely on a plain and general message firehose (implemented as a callback:
-        // IDataSubscriber).
-        private AsyncSubject<bool> connectSubject;
-        private AsyncSubject<LoginResponse> loginSubject;
-        private IDictionary<string, Subject<Message>> messageStreamByRoom;
-
-        #endregion
-
-        public RocketChatClient (string serverUrl)
+        public RocketChatClient (string serverUrl, DDPClient ddpClient)
         {
-            if (!IsValidWebsocketUrl (serverUrl)) {
-//                throw new ArgumentException ("Invalid URL");
-            }
-
-            ddpClient = new DDPClient (this);
-            loginSubject = new AsyncSubject<LoginResponse> ();
-            messageStreamByRoom = new Dictionary<string, Subject<Message>> ();
+            this.ddpClient = ddpClient;
             meteorUrl = serverUrl;
         }
 
         private IObservable<bool> Connect ()
         {
-            lock (connectLock) {
-                if (!isConnecting) {
-                    try {
-                        connectSubject = new AsyncSubject<bool> ();
-                        isConnecting = true;
-                        ddpClient.Connect (meteorUrl, false);
-                    } catch (Exception) {
-                        isConnecting = false;
-                        throw;
-                    }
-                }
-                return connectSubject.AsObservable ();
-            }
+            return ddpClient.Connect (meteorUrl).Select (m => DDPType.Connected.Equals (m.Type));
         }
 
-        public IObservable<Message> SubscribeToRoom (string roomName)
+        #region Rocket.Chat subscriptions
+
+        public IObservable<MessageContainer> SubscribeToMessageStream ()
         {
-            if (!messageStreamByRoom.ContainsKey (roomName)) {
-                // TODO Decide on hot vs cold mode... will depend on the final API form.
-                messageStreamByRoom.Add (roomName, new Subject<Message> ());
-            }
-
-            ddpClient.Subscribe (MessageCollection, new string[] { roomName });
-            return messageStreamByRoom [roomName].AsObservable ();
+            return ddpClient.Subscribe (RCSubscription.Messages)
+                .Where (message => message.Fields != null)
+                .Select (ddpMessage => Util.FromDDPMessageField<MessageContainer> (ddpMessage));
         }
+
+        public IObservable<User> SubscribeToFilteredUserStream ()
+        {
+            return ddpClient.Subscribe (RCSubscription.FilteredUsers, new object [] { })
+                .Where (message => message.Fields != null)
+                .Select (ddpMessage => Util.FromDDPMessageField<User> (ddpMessage));
+        }
+
+        public IObservable<User> SubscribeToActiveUserStream ()
+        {
+            return ddpClient.Subscribe (RCSubscription.ActiveUsers)
+                .Where (message => message.Fields != null)
+                .Select (ddpMessage => Util.FromDDPMessageField<User> (ddpMessage));
+        }
+
+        public IObservable<User> SubscribeToUserData ()
+        {
+            return ddpClient.Subscribe (RCSubscription.UserData)
+                .Where (message => message.Fields != null)
+                .Select (ddpMessage => Util.FromDDPMessageField<User> (ddpMessage));
+        }
+
+        public IObservable<User> SubscribeToFullUserData (string filter, int limit)
+        {
+            return ddpClient.Subscribe (RCSubscription.FullUserData, new object[] { filter, limit })
+                .Where (message => message.Fields != null)
+                .Select (ddpMessage => Util.FromDDPMessageField<User> (ddpMessage));
+        }
+
+        public IObservable<RoomNotification> SubscribeToRoomNotifications ()
+        {
+            return ddpClient.Subscribe (RCSubscription.NotifyRoom)
+                .Where (message => message.Fields != null)
+                .Select (ddpMessage => Util.FromDDPMessageField<RoomNotification> (ddpMessage));
+        }
+
+        public IObservable<UserNotification> SubscribeToUserNotifications ()
+        {
+            return ddpClient.Subscribe (RCSubscription.NotifyUser)
+                .Where (message => message.Fields != null)
+                .Select (ddpMessage => Util.FromDDPMessageField<UserNotification> (ddpMessage));
+        }
+
+        public IObservable<AllNotification> SubscribeToAllNotifications ()
+        {
+            return ddpClient.Subscribe (RCSubscription.NotifyAll)
+                .Where (message => message.Fields != null)
+                .Select (ddpMessage => Util.FromDDPMessageField<AllNotification> (ddpMessage));
+        }
+
+        public IObservable<Room> SubscribeToRooms ()
+        {
+            return ddpClient.Subscribe (RCSubscription.Rooms)
+                .Where (message => message.Fields != null)
+                .Select (ddpMessage => Util.FromDDPMessageField<Room> (ddpMessage));
+        }
+
+        public IObservable<T> SubscribeToCollection<T> (RCCollection collection) where T:DDPBaseModel, new()
+        {
+            return ddpClient.GetCollectionStream (collection.Name)
+                .Select (ddpMessage => Util.FromDDPMessageField<T> (ddpMessage));
+        }
+
+        #endregion
+
+        #region Rocket.Chat methods
 
         public IObservable<LoginResponse> LoginWithUsernameAndPassword (string username, string password)
         {
             try {
-                Connect ().Subscribe (
-                    (IsOk => {
-                        Debug.WriteLine ("OnNext: " + IsOk);
-                        loginRequestId = ddpClient.Call ("login", new object[] { new Dictionary<string, object> () { {
-                                    "user",
-                                    new Dictionary<string, string> () { {
-                                            "username",
-                                            username
-                                        }
-                                    }
-                                }, {
-                                    "password",
-                                    password
-                                }
-                            }
-                        });
-                    }),
-                    (exception => {
-                        Debug.WriteLine ("OnError: " + exception);
-                    })
-                );
-                return loginSubject.AsObservable ();
+                var requestArgs = buildLoginWithUsernameAndPasswordRequest (username, password);
+                return Connect ()
+                    .Where (ok => ok)
+                    .SelectMany (ok => ddpClient.Call ("login", requestArgs)
+                        .Select (ddpMessage => Util.FromDDPMessageResult<LoginResponse> (ddpMessage)));
             } catch (Exception e) {
                 throw LogAndReturnBack (e);
             }
+        }
+
+        private object[] buildLoginWithUsernameAndPasswordRequest (string username, string password)
+        {
+            return new object[] { new Dictionary<string, object> () { {
+                        "user",
+                        new Dictionary<string, string> () { {
+                                "username",
+                                username
+                            }
+                        }
+                    }, {
+                        "password",
+                        password
+                    }
+                }
+            };
         }
 
         public IObservable<LoginResponse> LoginWithJwtToken (string jwtToken)
         {
             try {
-                Connect ().Subscribe (
-                    (IsOk => {
-                        Debug.WriteLine ("OnNext: " + IsOk);
-                        loginRequestId = ddpClient.Call ("login", new object[] { new Dictionary<string, object> () { {
-                                    "connect",
-                                    jwtToken
-                                }
-                            }
-                        });
-                    }),
-                    (exception => {
-                        Debug.WriteLine ("OnError: " + exception);
-                    })
-                );
-                return loginSubject.AsObservable ();
+                var requestArgs = buildLoginWithJWTTokenRequest (jwtToken);
+                return Connect ()
+                    .Where (ok => ok)
+                    .SelectMany (ok => ddpClient.Call ("login", requestArgs)
+                        .Where (message => message.Result != null)
+                        .Select (ddpMessage => Util.FromDDPMessageResult<LoginResponse> (ddpMessage)));
             } catch (Exception e) {
                 throw LogAndReturnBack (e);
             }
         }
 
-        public IObservable<Message> sendTextMessage (string message, string roomId)
+        private object[] buildLoginWithJWTTokenRequest (string jwtToken)
         {
+            return new object[] { new Dictionary<string, object> () { {
+                        "connect",
+                        jwtToken
+                    }
+                }
+            };
+        }
+
+        public IObservable<Message> SendTextMessage (string message, string roomId)
+        {
+            if (string.IsNullOrWhiteSpace (roomId))
+                throw new ArgumentNullException ("roomId");
+
+            if (string.IsNullOrWhiteSpace (message))
+                throw new ArgumentNullException ("message");
+
             IDictionary<string, string>[] args = new IDictionary<string, string>[1];
             args [0] = new Dictionary<string, string> ();
             args [0].Add ("rid", roomId);
             args [0].Add ("msg", message);
-
-            ddpClient.Call ("sendMessage", args);
-		
-            return null;
+        
+            return ddpClient.Call (RCMethod.SendMessage, args)
+                .Select (ddpMessage => Util.BuildMessageFromResponse<Message> (ddpMessage));
         }
 
-        public void DataReceived (dynamic data)
+        public IObservable<CreateDirectMessageResponse> CreateDirectMessageRoom (string username)
         {
-            // This is the unsorted message firehose of messages received through the DDPClient.
-            // Each message should be handled according to its type.
-            try {
-                IDictionary<string, object> dataObj = data;
-                DDPType type = (DDPType)dataObj ["Type"];
-
-                switch (type) {
-                case DDPType.Connected:
-                    notifyOfConnectionResult (true);
-                    break;
-                case DDPType.Failed:
-                    notifyOfConnectionResult (false);
-                    break;
-                case DDPType.Added:
-                case DDPType.Removed:
-                case DDPType.Changed:
-                    HandleDataMessage (data);
-                    break;
-                case DDPType.MethodResult:
-                    HandleMethodResult (data);
-                    break;
-                case DDPType.Error:
-                    HandleError (data);
-                    break;
-                }
-            } catch (Exception ex) {
-                Debug.WriteLine (ex);
-            }
+            return ddpClient.Call (RCMethod.CreateDirectMessage, new string[] { username })
+                .Select (ddpMessage => Util.FromDDPMessageResult<CreateDirectMessageResponse> (ddpMessage));
         }
 
-        private void notifyOfConnectionResult (bool connectionWasOk)
+        public IObservable<EraseRoomResponse> EraseRoom (string roomId)
         {
-            lock (connectLock) {
-                connectSubject.OnNext (connectionWasOk);
-                connectSubject.OnCompleted ();
-                connectSubject = null;
-                isConnecting = false;
-            }
+            return ddpClient.Call (RCMethod.EraseRoom, new string[] { roomId })
+                .Select (ddpMessage => Util.FromDDPMessageResult<EraseRoomResponse> (ddpMessage));
         }
 
-        private void HandleError (IDictionary<string, object> data)
+        public IObservable<ArchiveRoomResponse> ArchiveRoom (string roomId)
         {
-			
+            return ddpClient.Call (RCMethod.ArchiveRoom, new string[] { roomId })
+                .Select (ddpMessage => Util.FromDDPMessageResult<ArchiveRoomResponse> (ddpMessage));
         }
 
-        private void HandleMethodResult (IDictionary<string, object> data)
+        public IObservable<UnarchiveRoomResponse> UnarchiveRoom (string roomId)
         {
-
-            // TODO Un-HardCode string literals
-            int requestId;
-            int.TryParse ((string)data ["RequestingId"], out requestId);
-
-            if (requestId == loginRequestId) {
-                // This is the result of a login request
-                var wasLoggedIn = !string.IsNullOrEmpty ((string)((IDictionary<string, object>)data.GetValue<object> ("Result"))?.GetValue<object> ("Token"));
-                Error error = parseErrorObject (data);
-
-                loginSubject.OnNext (new LoginResponse (wasLoggedIn, error));
-                loginSubject.OnCompleted ();
-            }
-			
+            return ddpClient.Call (RCMethod.UnarchiveRoom, new string[] { roomId })
+                .Select (ddpMessage => Util.FromDDPMessageResult<UnarchiveRoomResponse> (ddpMessage));
         }
 
-        private void HandleDataMessage (IDictionary<string, object> data)
+        public IObservable<LeaveRoomResponse> LeaveRoom (string roomId)
         {
-
-            string collection = (string)data ["Collection"];
-
-            switch (collection) {
-            case MessageCollection:
-                List<object> args = (List<object>)data.GetValue<object> ("Args", null);
-                if (args != null) {
-                    string roomId = (string)args [0];
-                    IDictionary<string, object> uData = (IDictionary<string, object>)args [1];
-                    string messageContent = (string)uData ["Msg"];
-                    string messageSenderUsername = (string)uData ["Msg"];
-                    if (messageStreamByRoom.ContainsKey (roomId)) {
-                        var message = new Message (messageContent);
-                        messageStreamByRoom [roomId].OnNext (message);
-                    }
-                }
-                break;
-            }
+            return ddpClient.Call (RCMethod.LeaveRoom, new string[] { roomId })
+                .Select (ddpMessage => Util.FromDDPMessageResult<LeaveRoomResponse> (ddpMessage));
         }
 
-        private bool IsValidWebsocketUrl (string url)
+        public IObservable<JoinRoomResponse> JoinRoom (string roomId)
         {
-            // TODO Do exhaustive testing of this, pretty sure it lets some incorrect urls in
-            // (because of Uri.IsWellFormedUriString()).
-            return !string.IsNullOrWhiteSpace (url)
-            && (url.StartsWith ("ws://")
-            || url.StartsWith ("wss://"))
-            && Uri.IsWellFormedUriString (url, UriKind.Absolute);
+            return ddpClient.Call (RCMethod.JoinRoom, new string[] { roomId })
+                .Select (ddpMessage => Util.FromDDPMessageResult<JoinRoomResponse> (ddpMessage));
         }
+
+        public IObservable<CanAccessRoomResponse> CanAccessRoom (string roomId, string userId)
+        {
+            return ddpClient.Call (RCMethod.CanAccessRoom, new string[] { roomId, userId })
+                .Select (ddpMessage => Util.FromDDPMessageResult<CanAccessRoomResponse> (ddpMessage));
+        }
+
+        public IObservable<ChannelsListResponse> ChannelList ()
+        {
+            return ddpClient.Call (RCMethod.ChannelsList)
+                .Select (ddpMessage => Util.FromDDPMessageResult<ChannelsListResponse> (ddpMessage));
+        }
+
+        public IObservable<AddUserToRoomResponse> AddUserToRoom (string roomId, string username)
+        {
+            IDictionary<string, string>[] args = new IDictionary<string, string>[1];
+            args [0] = new Dictionary<string, string> ();
+            args [0].Add ("rid", roomId);
+            args [0].Add ("username", username);
+
+            return ddpClient.Call (RCMethod.AddUserToRoom, args)
+                .Select (ddpMessage => Util.BuildMessageFromResponse<AddUserToRoomResponse> (ddpMessage));
+        }
+
+        public IObservable<CreateChannelResponse> CreateChannel (string name)
+        {
+            return ddpClient.Call (RCMethod.CreateChannel, new object[] { name, new short [] { } })
+                .Select (ddpMessage => Util.FromDDPMessageResult<CreateChannelResponse> (ddpMessage));
+        }
+
+        public IObservable<CreatePrivateGroupResponse> CreatePrivateGroup (string name)
+        {
+            return ddpClient.Call (RCMethod.CreatePrivateGroup, new object[] { name, new short [] { } })
+                .Select (ddpMessage => Util.FromDDPMessageResult<CreatePrivateGroupResponse> (ddpMessage));
+        }
+
+        public IObservable<GetGroupByNameOrIdResponse> GetGroupByNameOrId (string nameOrId)
+        {
+            return ddpClient.Call (RCMethod.GetRoomIdByNameOrId, new object[] { nameOrId })
+                .Select (ddpMessage => Util.BuildMessageFromResponse<GetGroupByNameOrIdResponse> (ddpMessage));
+        }
+
+        public IObservable<GetTotalChannelsResponse> GetTotalChannels ()
+        {
+            return ddpClient.Call (RCMethod.GetTotalChannels)
+                .Select (ddpMessage => Util.BuildMessageFromResponse<GetTotalChannelsResponse> (ddpMessage));
+        }
+
+        public IObservable<Messages> LoadHistory (string roomId, long? end, int limit, long ls)
+        {
+            return ddpClient.Call (RCMethod.LoadHistory, new object[] { roomId, end, limit, ls })
+                .Select (ddpMessage => Util.BuildMessageFromResponse<Messages> (ddpMessage));
+        }
+
+        #endregion
 
         private Exception LogAndReturnBack (Exception e)
         {
@@ -252,25 +275,37 @@ namespace Rocket.Chat.Net.Client
             return e;
         }
 
-        /// <summary>
-        /// Parses the error object.
-        /// </summary>
-        /// <returns>The error object, or null if not found</returns>
-        /// <param name="data">Data.</param>
-        private Error parseErrorObject (IDictionary<string, object> data)
+        public static RocketChatClientBuilder WithUrl (string url)
         {
-            if (data == null || !data.ContainsKey ("Error")) {
-                return null;
+            var builder = new RocketChatClientBuilder () { serverUrl = url };
+
+            return builder;
+        }
+
+        public class RocketChatClientBuilder
+        {
+            internal string serverUrl;
+            private DDPClient ddpClient;
+
+            public RocketChatClient Build ()
+            {
+                ValidateFields ();
+                AssignDefaults ();
+                
+                return new RocketChatClient (serverUrl, ddpClient);
             }
-            try {
-                var errorDict = (IDictionary<string, object>)data ["Error"];
-                string code = errorDict.GetValue<string> ("Error", null);
-                string reason = errorDict.GetValue<string> ("Reason", null);
-                string message = errorDict.GetValue<string> ("Message", null);
-                string errorType = errorDict.GetValue<string> ("ErrorType", null);
-                return new Error (code, reason, message, errorType);
-            } catch (InvalidCastException e) {
-                throw LogAndReturnBack (e);
+
+            private void AssignDefaults ()
+            {
+                if (ddpClient == null)
+                    ddpClient = new DDPClient ();
+            }
+
+            private void ValidateFields ()
+            {
+                // TODO Strengthen this
+                if (string.IsNullOrWhiteSpace (serverUrl))
+                    throw new ArgumentNullException ("serverUrl");
             }
         }
     }
