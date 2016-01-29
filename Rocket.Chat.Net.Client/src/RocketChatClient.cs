@@ -27,9 +27,9 @@ namespace Rocket.Chat.Net.Client
             meteorUrl = serverUrl;
         }
 
-        private IObservable<bool> Connect ()
+        private IObservable<DDPMessage> Connect ()
         {
-            return ddpClient.Connect (meteorUrl).Select (m => DDPType.Connected.Equals (m.Type));
+            return ddpClient.Connect (meteorUrl);
         }
 
         #region Rocket.Chat subscriptions
@@ -111,50 +111,60 @@ namespace Rocket.Chat.Net.Client
         {
             try {
                 var requestArgs = buildLoginWithUsernameAndPasswordRequest (username, password);
-                return Connect ()
-                    .Where (ok => ok)
-                    .SelectMany (ok => ddpClient.Call ("login", requestArgs)
-                        .Select (ddpMessage => Util.FromDDPMessageResult<LoginResponse> (ddpMessage)));
+                return Login (requestArgs);
             } catch (Exception e) {
                 throw LogAndReturnBack (e);
             }
-        }
-
-        private object[] buildLoginWithUsernameAndPasswordRequest (string username, string password)
-        {
-            return new object[] { new Dictionary<string, object> () { {
-                        "user",
-                        new Dictionary<string, string> () { {
-                                "username",
-                                username
-                            }
-                        }
-                    }, {
-                        "password",
-                        password
-                    }
-                }
-            };
         }
 
         public IObservable<LoginResponse> LoginWithJwtToken (string jwtToken)
         {
             try {
                 var requestArgs = buildLoginWithJWTTokenRequest (jwtToken);
-                return Connect ()
-                    .Where (ok => ok)
-                    .SelectMany (ok => ddpClient.Call ("login", requestArgs)
-                        .Where (message => message.Result != null)
-                        .Select (ddpMessage => Util.FromDDPMessageResult<LoginResponse> (ddpMessage)));
+                return Login (requestArgs);
             } catch (Exception e) {
                 throw LogAndReturnBack (e);
             }
         }
 
+        private IObservable<LoginResponse> Login (object[] requestArgs)
+        {
+            return Connect ()
+                .Where (m => TypeIsErrorFailedOrConnected (m))
+                .SelectMany (m => DDPType.Connected.Equals (m.Type) 
+                    ? ddpClient.Call (RCMethod.Login, requestArgs)
+                    : Observable.Return (m))
+                .Select (ddpMessage => Util.FromDDPMessageResult<LoginResponse> (ddpMessage));
+        }
+
+        private bool TypeIsErrorFailedOrConnected (DDPMessage m)
+        {
+            return DDPType.Connected.Equals (m.DDPMessageData.Type)
+            || DDPType.Failed.Equals (m.DDPMessageData.Type)
+            || DDPType.Error.Equals (m.DDPMessageData.Type);
+        }
+
+        private object[] buildLoginWithUsernameAndPasswordRequest (string username, string password)
+        {
+            return new object[] { new Dictionary<string, object> () { {
+                        RCOutgoingField.User,
+                        new Dictionary<string, string> () { {
+                                RCOutgoingField.Username,
+                                username
+                            }
+                        }
+                    }, {
+                        RCOutgoingField.Password,
+                        password
+                    }
+                }
+            };
+        }
+
         private object[] buildLoginWithJWTTokenRequest (string jwtToken)
         {
             return new object[] { new Dictionary<string, object> () { {
-                        "connect",
+                        RCOutgoingField.Connect,
                         jwtToken
                     }
                 }
@@ -171,8 +181,8 @@ namespace Rocket.Chat.Net.Client
 
             IDictionary<string, string>[] args = new IDictionary<string, string>[1];
             args [0] = new Dictionary<string, string> ();
-            args [0].Add ("rid", roomId);
-            args [0].Add ("msg", message);
+            args [0].Add (RCOutgoingField.RoomId, roomId);
+            args [0].Add (RCOutgoingField.Message, message);
         
             return ddpClient.Call (RCMethod.SendMessage, args)
                 .Select (ddpMessage => Util.BuildMessageFromResponse<Message> (ddpMessage));
@@ -230,8 +240,8 @@ namespace Rocket.Chat.Net.Client
         {
             IDictionary<string, string>[] args = new IDictionary<string, string>[1];
             args [0] = new Dictionary<string, string> ();
-            args [0].Add ("rid", roomId);
-            args [0].Add ("username", username);
+            args [0].Add (RCOutgoingField.RoomId, roomId);
+            args [0].Add (RCOutgoingField.Username, username);
 
             return ddpClient.Call (RCMethod.AddUserToRoom, args)
                 .Select (ddpMessage => Util.BuildMessageFromResponse<AddUserToRoomResponse> (ddpMessage));

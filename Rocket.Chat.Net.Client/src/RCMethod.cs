@@ -4,6 +4,7 @@ namespace Rocket.Chat.Net.Client
 {
     public static class RCMethod
     {
+        public const string Login = "login";
         public const string SendMessage = "sendMessage";
         public const string CreateDirectMessage = "createDirectMessage";
         public const string CreateChannel = "createChannel";

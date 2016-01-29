@@ -59,7 +59,6 @@
     <Compile Include="src\Model\LoginResponse.cs" />
     <Compile Include="src\Constants.cs" />
     <Compile Include="src\Model\User.cs" />
-    <Compile Include="src\RCField.cs" />
     <Compile Include="src\RCSubscription.cs" />
     <Compile Include="src\RCMethod.cs" />
     <Compile Include="src\Exception\MethodResultException.cs" />
@@ -88,6 +87,8 @@
     <Compile Include="src\Model\AllNotification.cs" />
     <Compile Include="src\Model\Room.cs" />
     <Compile Include="src\RCCollection.cs" />
+    <Compile Include="src\RCIncomingField.cs" />
+    <Compile Include="src\RCOutgoingField.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ItemGroup>

@@ -2,7 +2,7 @@
 
 namespace Rocket.Chat.Net.Client
 {
-    public static class RCField
+    public static class RCIncomingField
     {
         public const string Msg = "Msg";
         public const string RoomId = "Rid";
