@@ -14,12 +14,8 @@ namespace Rocket.Chat.Net.Client
 {
     public class RocketChatClient
     {
-        // TODO Implement the required level of thread safety.
-        private readonly object connectLock = new object ();
         private DDPClient ddpClient;
         private string meteorUrl;
-
-        private bool IsConnectedAndLoggedIn { get { return true; } }
 
         public RocketChatClient (string serverUrl, DDPClient ddpClient)
         {
@@ -30,6 +26,13 @@ namespace Rocket.Chat.Net.Client
         private IObservable<DDPMessage> Connect ()
         {
             return ddpClient.Connect (meteorUrl);
+        }
+
+        public void Close ()
+        {
+            if (ddpClient != null) {
+                ddpClient.Close ();
+            }
         }
 
         #region Rocket.Chat subscriptions
@@ -109,6 +112,12 @@ namespace Rocket.Chat.Net.Client
 
         public IObservable<LoginResponse> LoginWithUsernameAndPassword (string username, string password)
         {
+            if (string.IsNullOrWhiteSpace (username))
+                throw new ArgumentNullException ("username");
+
+            if (string.IsNullOrWhiteSpace (password))
+                throw new ArgumentNullException ("password");
+
             try {
                 var requestArgs = buildLoginWithUsernameAndPasswordRequest (username, password);
                 return Login (requestArgs);
@@ -119,6 +128,9 @@ namespace Rocket.Chat.Net.Client
 
         public IObservable<LoginResponse> LoginWithJwtToken (string jwtToken)
         {
+            if (string.IsNullOrWhiteSpace (jwtToken))
+                throw new ArgumentNullException ("jwtToken");
+                
             try {
                 var requestArgs = buildLoginWithJWTTokenRequest (jwtToken);
                 return Login (requestArgs);
@@ -313,9 +325,7 @@ namespace Rocket.Chat.Net.Client
 
             private void ValidateFields ()
             {
-                // TODO Strengthen this
-                if (string.IsNullOrWhiteSpace (serverUrl))
-                    throw new ArgumentNullException ("serverUrl");
+                Validations.ValidateUrl (serverUrl);
             }
         }
     }
