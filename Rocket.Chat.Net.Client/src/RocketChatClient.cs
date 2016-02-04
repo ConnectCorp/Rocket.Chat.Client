@@ -40,7 +40,6 @@ namespace Rocket.Chat.Net.Client
         public IObservable<MessageContainer> SubscribeToMessageStream ()
         {
             return ddpClient.Subscribe (RCSubscription.Messages)
-                .Where (message => message.Fields != null)
                 .Select (ddpMessage => Util.FromDDPMessageField<MessageContainer> (ddpMessage));
         }
 
@@ -91,6 +90,12 @@ namespace Rocket.Chat.Net.Client
             return ddpClient.Subscribe (RCSubscription.NotifyAll)
                 .Where (message => message.Fields != null)
                 .Select (ddpMessage => Util.FromDDPMessageField<AllNotification> (ddpMessage));
+        }
+
+        public IObservable<Room> SubscribeToRoom (string roomId, RoomType roomType)
+        {
+            return ddpClient.Subscribe (RCSubscription.Room, new object[] { roomType.TypeCode + roomId })
+                .Select (ddpMessage => Util.FromDDPMessageField<Room> (ddpMessage));
         }
 
         public IObservable<Room> SubscribeToRooms ()

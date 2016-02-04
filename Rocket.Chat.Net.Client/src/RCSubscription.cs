@@ -13,7 +13,7 @@ namespace Rocket.Chat.Net.Client
         public const string NotifyRoom = "stream-notify-room";
         public const string UserData = "userData";
         public const string FullUserData = "fullUserData";
-
+        public const string Room = "room";
         public const string Rooms = "subscription";
     }
 }

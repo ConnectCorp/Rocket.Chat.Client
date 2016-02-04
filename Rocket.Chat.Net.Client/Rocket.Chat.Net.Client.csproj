@@ -89,6 +89,7 @@
     <Compile Include="src\RCCollection.cs" />
     <Compile Include="src\RCIncomingField.cs" />
     <Compile Include="src\RCOutgoingField.cs" />
+    <Compile Include="src\RoomType.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ItemGroup>
